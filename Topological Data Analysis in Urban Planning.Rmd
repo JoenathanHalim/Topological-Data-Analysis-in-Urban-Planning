@@ -1,0 +1,132 @@
+---
+title: "Topological Data Analysis in Urban Planning"
+author: "Joenathan"
+date: "2024-08-21"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+```{r message=FALSE, warning=FALSE}
+library(TDA) #TDA 
+library(ggplot2) #plot 2d
+library(dplyr) #data analysis
+library(plotly) #plot 3d
+
+```
+
+## Import Dataset
+```{r}
+nyc = read.csv("flickr_nyc.csv", header = TRUE)
+```
+
+## Prepare Data
+```{r}
+#Ensure time is numeric
+nyc[,3:3] = sapply(nyc[,3:3], as.numeric)
+
+#Convert epoch time to UTC time
+nyc$Time = as.POSIXct(nyc$Time, origin = "1970-01-01", tz = "UTC")
+
+#Group data by 10 minutes interval
+grouped_data = nyc %>% mutate(time_interval = cut(Time, breaks = "10 min")) %>% group_by(time_interval)
+
+```
+
+## Define Density Function
+```{r}
+compute_density = function(grouped_data, epsilon = 0.1) {
+  n = nrow(grouped_data)
+  densities = numeric(n)
+  coords = grouped_data[,c("Latitude", "Longtitude")]
+  
+  for (i in 1:n) {
+    p = coords[i, ,drop = FALSE]
+    distances = sqrt(rowSums((t(coords) - as.numeric(p))^2))
+    densities[i] = sum(exp(-distances^2 / epsilon^2))
+  }
+  
+  return(densities)
+}
+```
+
+## Take Sample data
+```{r}
+data = head(grouped_data,2000)
+```
+
+## Apply TDA
+```{r}
+#Apply the density function to each time interval
+data = data %>% group_modify(~ {
+    .x = .x %>% mutate(density = compute_density(.x, epsilon = 0.001))
+    return(.x)
+})
+
+#Create a point cloud
+point_cloud  = data.frame(
+  x  = data$Latitude,
+  y = data$Longtitude,
+  z = data$density
+)
+  
+# Compute persistent homology
+# We consider the super-level sets by taking the density as the function value
+phom = ripsDiag(X = point_cloud, maxdimension = 0, maxscale = 0.5, library = "GUDHI", printProgress = TRUE, dist = "euclidean")
+
+# Plot the persistence diagram
+plot(phom$diagram, barcode = TRUE, main = "Persistence Barcode")
+
+#Define threshold
+threshold = 0.02
+
+#Extract topological Features
+persistent_h0 <- phom$diagram[phom$diagram[, 1] == 0 & (phom$diagram[, 3] - phom$diagram[, 2]) > threshold, ]
+
+# Extract the coordinates corresponding to persistent spatial clusters
+death_time = persistent_h0[,3]
+persistent_coords <- data[match(death_time, phom$diagram[,3]), c("time_interval", "Latitude", "Longtitude")]
+
+#Define function to check persistence
+is_persistent = function(row, persistent_coords, tolerance = 1e-5){
+  row_numeric = as.numeric(row[2:3])
+  any(apply(persistent_coords, 1, function(coord){
+    coord_numeric = as.numeric(coord[2:3])
+    all(abs(row_numeric - coord_numeric) < tolerance) & row[1] == coord[1]
+  }))
+}
+
+#The resulting data with persistence and non persistence value
+data$cluster = apply(data[,c("time_interval", "Latitude","Longtitude")], 1, function(row){
+  if(is_persistent(row, persistent_coords)){
+    return("Persistent")
+  } else {
+    return("Non Persistent")
+  }
+})
+
+#Visualize dataset
+ggplot(data, aes(x = Latitude, y = Longtitude, color = cluster)) + 
+  geom_point(alpha = 0.6) +
+  labs(title = "Spatial Urban Pulses",
+       x = "Latitude",
+       y = "Longtitude",
+       color = "Cluster") +
+  scale_color_manual(values = c("Persistent" = "blue", "Non Persistent" = "red")) +
+  theme_minimal() 
+
+plot_ly(data, x = ~Latitude, y = ~Longtitude, z = ~time_interval,
+        color = ~cluster, colors = c("blue","red"),
+        type = "scatter3d", mode = "markers") %>%
+  layout(title = "Spatial Urban Pulses over temporal resolutions",
+         scene = list(xaxis = list(title = "Latitude"),
+                      yaxis = list(title = "Longtitude"),
+                      zaxis = list(title = "Time Interval")))
+
+```
+
