@@ -1,6 +1,6 @@
 ---
 title: "Topological Data Analysis in Urban Planning"
-author: "Joenathan"
+author: "Joenathan Halim, Jr"
 date: "2024-08-21"
 output:
   html_document: default
