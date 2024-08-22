@@ -57,14 +57,14 @@ compute_density = function(grouped_data, epsilon = 0.1) {
 
 ## Take Sample data
 ```{r}
-data = head(grouped_data,2000)
+data = grouped_data %>% filter(grepl("2012-05-01", time_interval))
 ```
 
 ## Apply TDA
 ```{r}
 #Apply the density function to each time interval
 data = data %>% group_modify(~ {
-    .x = .x %>% mutate(density = compute_density(.x, epsilon = 0.001))
+    .x = .x %>% mutate(density = compute_density(.x, epsilon = 0.1))
     return(.x)
 })
 
