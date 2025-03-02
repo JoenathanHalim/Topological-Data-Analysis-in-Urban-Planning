@@ -1,6 +1,6 @@
 # Topological-Data-Analysis-in-Urban-Planning
 
-The following picture is my research poster for the odyssey program
+The following picture is my research poster for the odyssey research program
 
 ![alt text](https://github.com/JoenathanHalim/Topological-Data-Analysis-in-Urban-Planning/blob/main/Topological%20Data%20Analysis%20in%20Urban%20Planning.png)
 
